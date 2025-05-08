@@ -92,31 +92,27 @@ The Do Host Network Team`, otp)
 
 // LoginUser handles user login and token generation (pure business logic)
 func (s *AuthService) LoginUser(ctx context.Context, email, password string) (string, error) {
-	var hashedPassword, userID string
-
-	// Query the user by email
-	err := s.DB.QueryRowContext(ctx, `SELECT id, password_hash FROM users WHERE email = $1`, email).Scan(&userID, &hashedPassword)
+	// Fetch user details from repository
+	user, err := s.UserRepository.GetUserByEmail(email)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err.Error() == "user not found" {
 			return "", errors.New("invalid email or password")
 		}
 		return "", err
 	}
 
-	// Compare the provided password with the stored hashed password
-	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-	if err != nil {
+	// Compare hashed password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return "", errors.New("invalid email or password")
 	}
 
-	// Load the JWT secret key from config
+	// Load config and generate JWT
 	cfg, err := config.LoadConfig(".")
 	if err != nil {
 		return "", fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Generate a JWT token
-	token, err := utils.GenerateToken(24*time.Hour, userID, cfg.TokenSecret)
+	token, err := utils.GenerateToken(24*time.Hour, user.ID, cfg.TokenSecret)
 	if err != nil {
 		return "", err
 	}
@@ -151,26 +147,35 @@ func (s *AuthService) VerifyOTP(ctx context.Context, email, otp string) error {
 
 // ForgotPassword generates an OTP for password reset and sends an email
 func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
-	// Generate OTP
+	// Step 1: Check if user exists
+	user, err := s.UserRepository.GetUserByEmail(email)
+	if err != nil {
+		if err.Error() == "user not found" {
+			return fmt.Errorf("no user registered with this email")
+		}
+		return fmt.Errorf("failed to check user: %w", err)
+	}
+
+	// Step 2: Generate OTP
 	otp := utils.GenerateOTP(6) // Generate a 6-digit OTP
 
-	// Create OTP record
+	// Step 3: Create OTP record
 	otpRecord := models.OTP{
-		Email:      email,
+		Email:      user.Email,
 		OTP:        otp,
 		IsVerified: false,
 		CreatedAt:  time.Now(),
 	}
 
-	// Save OTP to the database
-	err := s.OTPRepository.SaveOTP(ctx, otpRecord)
+	// Step 4: Save OTP to the database
+	err = s.OTPRepository.SaveOTP(ctx, otpRecord)
 	if err != nil {
 		return fmt.Errorf("failed to save OTP: %w", err)
 	}
 
-	// Send email to the user
+	// Step 5: Send email
 	subject := "Reset Your Password - Do Host Network"
-	body := fmt.Sprintf(`Hello,
+	body := fmt.Sprintf(`Hello %s,
 
 We received a request to reset the password for your Do Host Network account. Please use the One-Time Password (OTP) below to reset your password.
 
@@ -179,14 +184,14 @@ Your OTP is: %s
 This OTP is valid for the next 10 minutes. If you did not request this password reset, please contact our support team or ignore this email.
 
 Best regards,
-The Do Host Network Team`, otp)
+The Do Host Network Team`, user.Username, otp)
 
-	err = utils.SendEmail(email, subject, body)
+	err = utils.SendEmail(user.Email, subject, body)
 	if err != nil {
 		return fmt.Errorf("failed to send OTP email: %w", err)
 	}
 
-	fmt.Println("Password reset email sent successfully to", email)
+	fmt.Println("Password reset email sent successfully to", user.Email)
 	return nil
 }
 

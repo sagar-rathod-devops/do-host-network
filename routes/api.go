@@ -90,11 +90,11 @@ func SetupServer() *gin.Engine {
 	// Public API
 	authGroup := router.Group("/auth")
 	{
-		authGroup.POST("/register", gin.WrapF(authController.Register))
+		authGroup.POST("/register", authController.Register)
 		authGroup.POST("/login", authController.Login)
-		authGroup.POST("/verify-otp", gin.WrapF(authController.VerifyOTP))
-		authGroup.POST("/forgot-password", gin.WrapF(authController.ForgotPassword))
-		authGroup.POST("/reset-password", gin.WrapF(authController.ResetPassword))
+		authGroup.POST("/verify-otp", authController.VerifyOTP)
+		authGroup.POST("/forgot-password", authController.ForgotPassword)
+		authGroup.POST("/reset-password", authController.ResetPassword)
 	}
 
 	// Private API (Protected by middleware)
