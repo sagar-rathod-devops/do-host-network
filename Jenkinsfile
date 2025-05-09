@@ -1,7 +1,5 @@
 pipeline {
-    agent {
-        docker { image 'golang:1.21' }
-    }
+    agent any
 
     stages {
         stage('Clone') {
@@ -10,15 +8,14 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                sh 'go build -o app .'
+                sh 'docker build -t do-host-network .'
             }
         }
 
-        stage('Run Docker') {
+        stage('Run Docker Container') {
             steps {
-                sh 'docker build -t do-host-network .'
                 sh 'docker run -d -p 8000:8000 do-host-network'
             }
         }
