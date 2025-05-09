@@ -19,7 +19,7 @@ pipeline {
         stage('Run Docker') {
             steps {
                 sh 'docker build -t do-host-network .'
-                sh 'docker run -d -p 8080:8080 do-host-network'
+                sh 'docker run -d -p 8000:8000 do-host-network'
             }
         }
     }
